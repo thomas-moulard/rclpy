@@ -18,6 +18,8 @@ import rclpy
 
 global_node = None
 global_node_name = ''
+# rospy lets you create publishers and subscribers before calling
+# init_node(), so we need to keep track of them as pending
 global_pending_publishers = []
 global_pending_subscribers = []
 
