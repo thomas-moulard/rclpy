@@ -76,7 +76,7 @@ class ParameterService:
     def _list_parameters_callback(self, request, response):
         names_with_prefixes = []
         for name in self._node._parameters.keys():
-            if '.' in name:
+            if PARAMETER_SEPARATOR_STRING in name:
                 names_with_prefixes.append(name)
                 continue
             elif request.prefixes:
@@ -88,7 +88,8 @@ class ParameterService:
 
         if not request.DEPTH_RECURSIVE == request.depth:
             names_with_prefixes = filter(
-                lambda name: name.count('.') + 1 <= request.depth, names_with_prefixes
+                lambda name:
+                    name.count(PARAMETER_SEPARATOR_STRING) < request.depth, names_with_prefixes
             )
         for name in names_with_prefixes:
             if request.prefixes:
