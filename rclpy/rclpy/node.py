@@ -60,7 +60,7 @@ class Node:
 
     def __init__(
         self, node_name, *, cli_args=None, namespace=None, use_global_arguments=True,
-        start_parameter_services=True
+        start_parameter_services=False
     ):
         self._handle = None
         self._parameters = {}

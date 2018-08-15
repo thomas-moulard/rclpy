@@ -213,7 +213,9 @@ class TestNode(unittest.TestCase):
         self.assertEqual(self.node.get_parameter('unset').type_, Parameter.Type.NOT_SET)
 
     def test_node_has_parameter_services(self):
-        service_names_and_types = self.node.get_service_names_and_types()
+        node = rclpy.create_node(TEST_NODE, namespace=TEST_NAMESPACE,
+             start_parameter_services=True)
+        service_names_and_types = node.get_service_names_and_types()
         self.assertIn(
             ('/my_ns/my_node/describe_parameters', ['rcl_interfaces/DescribeParameters']),
             service_names_and_types
