@@ -34,7 +34,7 @@ from rclpy.service import Service
 from rclpy.subscription import Subscription
 from rclpy.time_source import TimeSource
 from rclpy.timer import WallTimer
-from rclpy.utilities import ok
+from rclpy.utilities import get_default_context
 from rclpy.validate_full_topic_name import validate_full_topic_name
 from rclpy.validate_namespace import validate_namespace
 from rclpy.validate_node_name import validate_node_name
@@ -60,10 +60,11 @@ def check_for_type_support(msg_type):
 class Node:
 
     def __init__(
-        self, node_name, *, cli_args=None, namespace=None, use_global_arguments=True,
+        self, node_name, *, context=None, cli_args=None, namespace=None, use_global_arguments=True,
         start_parameter_services=True, initial_parameters=None
     ):
         self._handle = None
+        self._context = get_default_context() if context is None else context
         self._parameters = {}
         self.publishers = []
         self.subscriptions = []
@@ -71,15 +72,16 @@ class Node:
         self.services = []
         self.timers = []
         self.guards = []
+        self.waitables = []
         self._default_callback_group = MutuallyExclusiveCallbackGroup()
         self._parameters_callback = None
 
         namespace = namespace or ''
-        if not ok():
+        if not self._context.ok():
             raise NotInitializedException('cannot create node')
         try:
             self._handle = _rclpy.rclpy_create_node(
-                node_name, namespace, cli_args, use_global_arguments)
+                node_name, namespace, self._context.handle, cli_args, use_global_arguments)
         except ValueError:
             # these will raise more specific errors if the name or namespace is bad
             validate_node_name(node_name)
@@ -130,6 +132,10 @@ class Node:
             self.__executor_weakref = None
         elif new_executor.add_node(self):
             self.__executor_weakref = weakref.ref(new_executor)
+
+    @property
+    def context(self):
+        return self._context
 
     @property
     def handle(self):
@@ -213,6 +219,14 @@ class Node:
         expanded_topic_or_service_name = expand_topic_name(topic_or_service_name, name, namespace)
         validate_full_topic_name(expanded_topic_or_service_name, is_service=is_service)
 
+    def add_waitable(self, waitable):
+        """Add a class which itself is capable of add things to the wait set."""
+        self.waitables.append(waitable)
+
+    def remove_waitable(self, waitable):
+        """Remove a class which itself is capable of add things to the wait set."""
+        self.waitables.remove(waitable)
+
     def create_publisher(self, msg_type, topic, *, qos_profile=qos_profile_default):
         # this line imports the typesupport for the message module if not already done
         check_for_type_support(msg_type)
@@ -269,7 +283,8 @@ class Node:
         if failed:
             self._validate_topic_or_service_name(srv_name, is_service=True)
         client = Client(
-            self.handle, client_handle, client_pointer, srv_type, srv_name, qos_profile,
+            self.handle, self.context,
+            client_handle, client_pointer, srv_type, srv_name, qos_profile,
             callback_group)
         self.clients.append(client)
         callback_group.add_entity(client)
@@ -303,7 +318,7 @@ class Node:
         timer_period_nsec = int(float(timer_period_sec) * S_TO_NS)
         if callback_group is None:
             callback_group = self._default_callback_group
-        timer = WallTimer(callback, callback_group, timer_period_nsec)
+        timer = WallTimer(callback, callback_group, timer_period_nsec, context=self.context)
 
         self.timers.append(timer)
         callback_group.add_entity(timer)
@@ -312,7 +327,7 @@ class Node:
     def create_guard_condition(self, callback, callback_group=None):
         if callback_group is None:
             callback_group = self._default_callback_group
-        guard = GuardCondition(callback, callback_group)
+        guard = GuardCondition(callback, callback_group, context=self.context)
 
         self.guards.append(guard)
         callback_group.add_entity(guard)
